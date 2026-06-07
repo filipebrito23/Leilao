@@ -1,0 +1,7 @@
+streamlit
+pandas
+openpyxl
+sqlalchemy
+streamlit-autorefresh
+bcrypt
+psycopg2-binary
