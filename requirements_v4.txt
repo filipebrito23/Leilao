@@ -1,0 +1,6 @@
+streamlit
+pandas
+openpyxl
+sqlalchemy
+streamlit-autorefresh
+bcrypt
