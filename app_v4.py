@@ -54,7 +54,7 @@ if not st.session_state.user_v4:
                 st.rerun()
             else:
                 st.error("E-mail ou senha inválidos.")
-    st.info("Admin padrão: admin@auction.local / admin123")
+    #st.info("Admin padrão: admin@auction.local / admin123")
     st.stop()
 
 user = st.session_state.user_v4
