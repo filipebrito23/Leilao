@@ -1,10 +1,17 @@
 from pathlib import Path
 import pandas as pd
+import streamlit as st
 from sqlalchemy import text
+
 from db_v5 import engine, init_db_v5
 from auth_v5 import create_user_v5
 
 POSITION_SHEETS = ["PG", "PGSG", "SG", "SGSF", "SF", "SFPF", "PF", "PFC", "C"]
+
+
+def is_production_v5():
+    app_cfg = st.secrets.get("app", {})
+    return str(app_cfg.get("environment", "development")).lower() == "production"
 
 
 def import_caps_v5(xlsx_path):
@@ -12,6 +19,9 @@ def import_caps_v5(xlsx_path):
     df.columns = [str(c).strip() for c in df.columns]
     df = df.rename(columns={df.columns[0]: "team_name", df.columns[1]: "cap_limit"})
     df = df.dropna(subset=["team_name"])
+
+    inserted = 0
+    updated = 0
 
     with engine.begin() as conn:
         for _, row in df.iterrows():
@@ -37,6 +47,7 @@ def import_caps_v5(xlsx_path):
                     "cap_limit": cap_limit,
                     "team_id": existing_team_id
                 })
+                updated += 1
             else:
                 conn.execute(text("""
                     INSERT INTO teams (team_name, cap_limit)
@@ -45,10 +56,16 @@ def import_caps_v5(xlsx_path):
                     "team_name": team_name,
                     "cap_limit": cap_limit
                 })
+                inserted += 1
+
+    return {"inserted": inserted, "updated": updated}
 
 
 def import_players_v5(xlsx_path):
     xl = pd.ExcelFile(xlsx_path)
+
+    inserted = 0
+    updated = 0
 
     with engine.begin() as conn:
         for sheet in POSITION_SHEETS:
@@ -97,6 +114,7 @@ def import_players_v5(xlsx_path):
                         "owner_team_id": owner_team_id,
                         "player_id": existing_player_id
                     })
+                    updated += 1
                 else:
                     conn.execute(text("""
                         INSERT INTO players (
@@ -116,6 +134,7 @@ def import_players_v5(xlsx_path):
                         "position": sheet,
                         "owner_team_id": owner_team_id
                     })
+                    inserted += 1
 
         conn.execute(text("""
             INSERT INTO player_state (player_id, status, is_renewal)
@@ -126,26 +145,42 @@ def import_players_v5(xlsx_path):
             WHERE ps.player_id IS NULL
         """))
 
+    return {"inserted": inserted, "updated": updated}
+
 
 def seed_default_admin_v5():
+    app_cfg = st.secrets.get("app", {})
+    admin_email = app_cfg.get("admin_email", "admin@auction.local")
+    admin_password = app_cfg.get("admin_password", "trocar_essa_senha")
+
     with engine.begin() as conn:
         exists = conn.execute(text("""
             SELECT COUNT(*)
             FROM users
-            WHERE lower(email) = 'admin@auction.local'
-        """)).scalar()
+            WHERE lower(email) = lower(:email)
+        """), {
+            "email": admin_email
+        }).scalar()
 
     if not exists:
         create_user_v5(
-            "admin@auction.local",
-            "admin123",
+            admin_email,
+            admin_password,
             "admin",
             None,
             must_change_password=0
         )
+        return True
+
+    return False
 
 
 def seed_example_team_users_v5():
+    if is_production_v5():
+        return 0
+
+    created = 0
+
     with engine.begin() as conn:
         teams = conn.execute(text("""
             SELECT team_id, team_name
@@ -173,16 +208,33 @@ def seed_example_team_users_v5():
                 team_id,
                 must_change_password=1
             )
+            created += 1
+
+    return created
+
+
+def run_import_v5(xlsx_path):
+    init_db_v5()
+
+    cap_result = import_caps_v5(xlsx_path)
+    player_result = import_players_v5(xlsx_path)
+    admin_created = seed_default_admin_v5()
+    demo_users_created = seed_example_team_users_v5()
+
+    return {
+        "caps": cap_result,
+        "players": player_result,
+        "admin_created": admin_created,
+        "demo_users_created": demo_users_created
+    }
 
 
 if __name__ == "__main__":
     base_dir = Path(__file__).resolve().parent
     xlsx_path = base_dir / "Lista.xlsx"
 
-    init_db_v5()
-    import_caps_v5(xlsx_path)
-    import_players_v5(xlsx_path)
-    seed_default_admin_v5()
-    seed_example_team_users_v5()
+    if not xlsx_path.exists():
+        raise FileNotFoundError(f"Arquivo não encontrado: {xlsx_path}")
 
-    print("Importação v5 concluída com sucesso.")
+    result = run_import_v5(xlsx_path)
+    print(result)

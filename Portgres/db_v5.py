@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import streamlit as st
 from sqlalchemy import create_engine, text
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -9,24 +10,62 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 LOCAL_DB_PATH = DATA_DIR / "auction_v5_local.db"
 
 
-def get_database_url_v5():
-    database_url = os.getenv("DATABASE_URL", "").strip()
-    if database_url:
-        return database_url
+def build_database_url_v5():
+    app_cfg = st.secrets.get("app", {})
+    force_sqlite = bool(app_cfg.get("force_sqlite", False))
+    if force_sqlite:
+        return f"sqlite:///{LOCAL_DB_PATH.as_posix()}"
+
+    if "database" in st.secrets:
+        db = st.secrets["database"]
+        host = str(db.get("host", "")).strip()
+        database = str(db.get("database", "")).strip()
+        username = str(db.get("username", "")).strip()
+        password = str(db.get("password", "")).strip()
+
+        placeholders = {"SEU_HOST", "SEU_BANCO", "SEU_USUARIO", "SUA_SENHA"}
+        if host in placeholders or database in placeholders or username in placeholders or password in placeholders:
+            raise ValueError("secrets.toml ainda contém valores de exemplo.")
+
+        dialect = db.get("dialect", "postgresql")
+        port = str(db.get("port", "5432"))
+        sslmode = db.get("sslmode", "require")
+        return f"{dialect}+psycopg2://{username}:{password}@{host}:{port}/{database}?sslmode={sslmode}"
+
+    env_url = os.getenv("DATABASE_URL", "").strip()
+    if env_url:
+        return env_url
+
     return f"sqlite:///{LOCAL_DB_PATH.as_posix()}"
 
+DATABASE_URL = build_database_url_v5()
+IS_POSTGRES = DATABASE_URL.startswith("postgresql")
 
-DATABASE_URL = get_database_url_v5()
+ENGINE_KWARGS = {
+    "future": True,
+    "pool_pre_ping": True,
+}
 
-engine = create_engine(
-    DATABASE_URL,
-    future=True,
-    pool_pre_ping=True
-)
+if IS_POSTGRES:
+    ENGINE_KWARGS.update({
+        "pool_timeout": 10,
+        "pool_recycle": 1800,
+        "connect_args": {
+            "connect_timeout": 5,
+            "options": "-c statement_timeout=15000 -c lock_timeout=5000"
+        }
+    })
+
+engine = create_engine(DATABASE_URL, **ENGINE_KWARGS)
 
 
 def is_postgres_v5():
-    return DATABASE_URL.startswith("postgresql")
+    return IS_POSTGRES
+
+
+def healthcheck_db_v5():
+    with engine.begin() as conn:
+        conn.execute(text("SELECT 1"))
 
 
 def init_db_v5():

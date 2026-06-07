@@ -4,7 +4,7 @@ import streamlit as st
 from sqlalchemy import text
 from streamlit_autorefresh import st_autorefresh
 
-from db_v5 import engine, init_db_v5
+from db_v5 import engine, init_db_v5, healthcheck_db_v5, is_postgres_v5
 from auth_v5 import (
     authenticate_user_v5,
     get_all_users_v5,
@@ -24,8 +24,27 @@ POSITIONS = ["Todas", "PG", "PGSG", "SG", "SGSF", "SF", "SFPF", "PF", "PFC", "C"
 
 st.set_page_config(page_title="Leilão NBA Fantasy v5", layout="wide")
 
-init_db_v5()
-close_expired_bids_v5()
+
+def get_environment_label_v5():
+    app_cfg = st.secrets.get("app", {})
+    return str(app_cfg.get("environment", "development")).lower()
+
+
+def startup_v5():
+    try:
+        healthcheck_db_v5()
+        init_db_v5()
+        close_expired_bids_v5()
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
+ok_startup, startup_error = startup_v5()
+
+if not ok_startup:
+    st.error(f"Erro ao inicializar aplicação: {startup_error}")
+    st.stop()
 
 if "user_v5" not in st.session_state:
     st.session_state.user_v5 = None
@@ -57,6 +76,9 @@ def format_remaining_v5(expires_at):
         return "-"
 
 
+st.sidebar.caption(f"Ambiente: {get_environment_label_v5()}")
+st.sidebar.caption(f"Banco: {'PostgreSQL' if is_postgres_v5() else 'SQLite'}")
+
 if not st.session_state.user_v5:
     st.title("Leilão NBA Fantasy v5")
     st.subheader("Login por e-mail")
@@ -74,7 +96,6 @@ if not st.session_state.user_v5:
             else:
                 st.error("E-mail ou senha inválidos.")
 
-    st.info("Admin padrão: admin@auction.local / admin123")
     st.stop()
 
 user = st.session_state.user_v5

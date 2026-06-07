@@ -3,6 +3,10 @@ from sqlalchemy import text
 from db_v5 import engine
 
 
+def utc_now_iso_v5():
+    return datetime.now(timezone.utc).isoformat()
+
+
 def log_event_v5(username, action, entity_type, entity_id=None, details=None):
     with engine.begin() as conn:
         conn.execute(text("""
@@ -23,7 +27,7 @@ def log_event_v5(username, action, entity_type, entity_id=None, details=None):
                 :details
             )
         """), {
-            "event_time": datetime.now(timezone.utc).isoformat(),
+            "event_time": utc_now_iso_v5(),
             "username": username,
             "action": action,
             "entity_type": entity_type,
@@ -52,11 +56,15 @@ def get_team_cap_status_v5(conn, team_id):
         "team_id": team_id
     }).scalar()
 
-    return float(cap_limit or 0), float(used or 0), float((cap_limit or 0) - (used or 0))
+    cap_limit = float(cap_limit or 0)
+    used = float(used or 0)
+    available = cap_limit - used
+
+    return cap_limit, used, available
 
 
 def close_expired_bids_v5():
-    now = datetime.now(timezone.utc)
+    now = utc_now_iso_v5()
 
     with engine.begin() as conn:
         rows = conn.execute(text("""
@@ -66,7 +74,7 @@ def close_expired_bids_v5():
               AND expires_at IS NOT NULL
               AND expires_at < :now
         """), {
-            "now": now.isoformat()
+            "now": now
         }).fetchall()
 
         for row in rows:
@@ -85,7 +93,7 @@ def close_expired_bids_v5():
                 WHERE player_id = :player_id
             """), {
                 "player_id": row.player_id,
-                "now": now.isoformat()
+                "now": now
             })
 
 
@@ -93,8 +101,17 @@ def submit_bid_v5(player_id, team_id, amount, years, username, user_id, role, fo
     if role != "admin" and forced_team_id is not None and team_id != forced_team_id:
         return False, "Usuário não pode lançar por outro time."
 
-    now = datetime.now(timezone.utc)
-    expires_at = now + timedelta(hours=24)
+    if amount is None or float(amount) <= 0:
+        return False, "O valor da proposta deve ser maior que zero."
+
+    if years is None or int(years) <= 0:
+        return False, "A quantidade de anos deve ser maior que zero."
+
+    close_expired_bids_v5()
+
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    expires_at = (now_dt + timedelta(hours=24)).isoformat()
 
     with engine.begin() as conn:
         player = conn.execute(text("""
@@ -129,13 +146,16 @@ def submit_bid_v5(player_id, team_id, amount, years, username, user_id, role, fo
             "player_id": player_id
         }).mappings().first()
 
-        released_amount = 0
+        released_amount = 0.0
         if current_active and current_active["active_team_id"] == team_id:
             released_amount = float(current_active["active_amount"] or 0)
 
         current_amount = None
         if current_active and current_active["active_amount"] is not None:
             current_amount = float(current_active["active_amount"])
+
+        amount = float(amount)
+        years = int(years)
 
         if current_amount is not None:
             if is_renewal:
@@ -188,7 +208,7 @@ def submit_bid_v5(player_id, team_id, amount, years, username, user_id, role, fo
             "team_id": team_id,
             "amount": amount,
             "years": years,
-            "created_at": now.isoformat(),
+            "created_at": now,
             "is_renewal": is_renewal,
             "created_by_user_id": user_id
         })
@@ -209,8 +229,8 @@ def submit_bid_v5(player_id, team_id, amount, years, username, user_id, role, fo
             "team_id": team_id,
             "amount": amount,
             "years": years,
-            "active_at": now.isoformat(),
-            "expires_at": expires_at.isoformat(),
+            "active_at": now,
+            "expires_at": expires_at,
             "is_renewal": is_renewal
         }
 
