@@ -20,7 +20,7 @@ from auction_v5 import (
     get_audit_rows_v5
 )
 
-POSITIONS = ["Todas", "PG", "PGSG", "SG", "SGSF", "SF", "SFPF", "PF", "PFC", "C"]
+POSITIONS = ["Todas", "PG", "PG_SG", "SG", "SG_SF", "SF", "SF_PF", "PF", "PF_C", "C"]
 
 st.set_page_config(page_title="Leilão NBA Fantasy v5", layout="wide")
 
