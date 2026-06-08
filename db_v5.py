@@ -1,3 +1,4 @@
+
 from pathlib import Path
 import os
 import streamlit as st
@@ -10,33 +11,34 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 LOCAL_DB_PATH = DATA_DIR / "auction_v5_local.db"
 
 
+import os
+from pathlib import Path
+import streamlit as st
+from sqlalchemy import create_engine
+
+LOCAL_DB_PATH = Path("data/auction_v5_local.db")
+
 def build_database_url_v5():
-    app_cfg = st.secrets.get("app", {})
-    force_sqlite = bool(app_cfg.get("force_sqlite", False))
-    if force_sqlite:
-        return f"sqlite:///{LOCAL_DB_PATH.as_posix()}"
-
-    if "database" in st.secrets:
-        db = st.secrets["database"]
-        host = str(db.get("host", "")).strip()
-        database = str(db.get("database", "")).strip()
-        username = str(db.get("username", "")).strip()
-        password = str(db.get("password", "")).strip()
-
-        placeholders = {"SEU_HOST", "SEU_BANCO", "SEU_USUARIO", "SUA_SENHA"}
-        if host in placeholders or database in placeholders or username in placeholders or password in placeholders:
-            raise ValueError("secrets.toml ainda contém valores de exemplo.")
-
-        dialect = db.get("dialect", "postgresql")
-        port = str(db.get("port", "5432"))
-        sslmode = db.get("sslmode", "require")
-        return f"{dialect}+psycopg2://{username}:{password}@{host}:{port}/{database}?sslmode={sslmode}"
-
     env_url = os.getenv("DATABASE_URL", "").strip()
     if env_url:
         return env_url
 
+    if "database" in st.secrets:
+        db = st.secrets["database"]
+        dialect = db.get("dialect", "postgresql")
+        host = str(db.get("host", "")).strip()
+        port = str(db.get("port", "5432")).strip()
+        database = str(db.get("database", "")).strip()
+        username = str(db.get("username", "")).strip()
+        password = str(db.get("password", "")).strip()
+        sslmode = str(db.get("sslmode", "require")).strip()
+
+        return f"{dialect}+psycopg2://{username}:{password}@{host}:{port}/{database}?sslmode={sslmode}"
+
     return f"sqlite:///{LOCAL_DB_PATH.as_posix()}"
+
+DATABASE_URL = build_database_url_v5()
+engine = create_engine(DATABASE_URL, future=True)
 
 DATABASE_URL = build_database_url_v5()
 IS_POSTGRES = DATABASE_URL.startswith("postgresql")
@@ -234,3 +236,4 @@ def init_db_v5():
                     details TEXT NULL
                 )
             """))
+            print(engine.url.render_as_string(hide_password=True))
