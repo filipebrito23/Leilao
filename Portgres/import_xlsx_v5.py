@@ -6,7 +6,7 @@ from sqlalchemy import text
 from db_v5 import engine, init_db_v5
 from auth_v5 import create_user_v5
 
-POSITION_SHEETS = ["PG", "PGSG", "SG", "SGSF", "SF", "SFPF", "PF", "PFC", "C"]
+POSITION_SHEETS = ["PG", "PG_SG", "SG", "SG_SF", "SF", "SF_PF", "PF", "PF_C", "C"]
 
 
 def is_production_v5():
