@@ -126,7 +126,7 @@ if user.get("must_change_password") == 1:
 
     st.stop()
 
-st_autorefresh(interval=20000, key="auction_refresh_v5")
+#st_autorefresh(interval=20000, key="auction_refresh_v5")
 
 st.title("Leilão NBA Fantasy v5")
 
@@ -250,7 +250,7 @@ with bid_tab:
                 step=100000.0,
                 format="%.2f"
             )
-            years = st.number_input("Anos", min_value=1, max_value=5, step=1)
+            years = st.number_input("Anos", min_value=1, max_value=4, step=1)
 
             submitted = st.form_submit_button("Enviar proposta")
 
