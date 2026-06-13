@@ -147,15 +147,12 @@ with main_tab:
         st.dataframe(
             players[
                 [
-                    "player_id",
                     "player_name",
                     "position",
                     "dono",
                     "time_ativo",
                     "proposta_ativa",
                     "anos",
-                    "active_at",
-                    "expires_at",
                     "tempo_restante",
                     "tipo",
                     "status",
