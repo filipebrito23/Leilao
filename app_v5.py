@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from num2words import num2words
 import pandas as pd
 import streamlit as st
 from sqlalchemy import text
@@ -49,6 +50,11 @@ def logout_v5():
     st.session_state.user_v5 = None
     st.rerun()
 
+def valor_por_extenso(v):
+    try:
+        return num2words(v, lang="pt_BR", to="currency")
+    except Exception:
+        return "-"
 
 def formatar_brl_v5(valor):
     return f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -156,6 +162,8 @@ with bid_tab:
                 team_id = st.session_state.user_v5.get('team_id')
                 st.text_input("Time", value=user.get("team_name", ""), disabled=True)
             amount = st.number_input("Valor da proposta", min_value=1000000.0, step=100000.0, format="%.2f")
+            st.caption(f"Confirmação: R$ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.caption(f"Por extenso: {valor_por_extenso(amount)}")
             years = st.number_input("Anos", min_value=1, max_value=4, step=1)
             submitted = st.form_submit_button("Enviar proposta")
             if submitted:
@@ -185,7 +193,7 @@ with admin_tab:
             selected_bid_id = st.selectbox("Selecionar proposta", bid_options, format_func=lambda bid_id: f"#{bid_id} - {bids_df.loc[bids_df['bid_id']==bid_id, 'player_name'].iloc[0]} / {bids_df.loc[bids_df['bid_id']==bid_id, 'team_name'].iloc[0]}")
             selected_bid = bids_df.loc[bids_df['bid_id'] == selected_bid_id].iloc[0]
             with st.form("admin_edit_bid_form"):
-                new_amount = st.number_input("Novo valor", value=float(selected_bid['amount']), min_value=0.0, step=100000.0, format="%.2f")
+                new_amount = st.number_input("Novo valor", value=float(selected_bid['amount']), min_value=1000000.0, step=100000.0, format="%.2f")
                 new_years = st.number_input("Novos anos", value=int(selected_bid['years']), min_value=1, max_value=4, step=1)
                 edit_submit = st.form_submit_button("Salvar edição")
                 if edit_submit:
