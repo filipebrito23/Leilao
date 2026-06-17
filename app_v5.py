@@ -143,37 +143,68 @@ with main_tab:
         st.info("Nenhum jogador encontrado para o filtro atual.")
 
 with bid_tab:
+    st.subheader("Nova proposta")
+
     players = pd.DataFrame(get_players_with_state_v5("Todas"))
     open_players = players[players["status"] == "OPEN"] if not players.empty else pd.DataFrame()
+
     with engine.begin() as conn:
         teams = conn.execute(text("SELECT team_id, team_name FROM teams ORDER BY team_name")).fetchall()
         team_map = {name: tid for tid, name in teams}
-    with st.form("bid_form_v5"):
-        if open_players.empty:
-            st.warning("Não há jogadores abertos para lance.")
-        else:
-            player_id = st.selectbox("Jogador", open_players["player_id"].tolist(), format_func=lambda pid: open_players.loc[open_players["player_id"] == pid, "player_name"].iloc[0])
-            selected_row = open_players.loc[open_players["player_id"] == player_id].iloc[0]
-            st.write(f"Proposta ativa atual: {formatar_brl_v5(float(selected_row['proposta_ativa'])) if pd.notna(selected_row['proposta_ativa']) else '-'}")
-            if user['role'] == "admin":
-                team_name = st.selectbox("Time", list(team_map.keys()))
-                team_id = team_map[team_name]
-            else:
-                team_id = st.session_state.user_v5.get('team_id')
-                st.text_input("Time", value=user.get("team_name", ""), disabled=True)
-            amount = st.number_input("Valor da proposta", min_value=1000000.0, step=100000.0, format="%.2f")
-            st.caption(f"Confirmação: R$ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            st.caption(f"Por extenso: {valor_por_extenso(amount)}")
-            years = st.number_input("Anos", min_value=1, max_value=4, step=1)
-            submitted = st.form_submit_button("Enviar proposta")
-            if submitted:
-                ok, msg = submit_bid_v5(player_id, team_id, amount, years, user['email'], user['user_id'], user['role'], user.get('team_id'))
-                if ok:
-                    st.success(msg)
-                    st.rerun()
-                else:
-                    st.error(msg)
 
+    if "amount_preview_v5" not in st.session_state:
+        st.session_state.amount_preview_v5 = 1000000.0
+
+    if open_players.empty:
+        st.warning("Não há jogadores abertos para lance.")
+    else:
+        player_id = st.selectbox(
+            "Jogador",
+            open_players["player_id"].tolist(),
+            format_func=lambda pid: open_players.loc[open_players["player_id"] == pid, "player_name"].iloc[0],
+        )
+
+        selected_row = open_players.loc[open_players["player_id"] == player_id].iloc[0]
+        st.write(
+            f"Proposta ativa atual: {formatar_brl_v5(float(selected_row['proposta_ativa'])) if pd.notna(selected_row['proposta_ativa']) else '-'}"
+        )
+
+        if user["role"] == "admin":
+            team_name = st.selectbox("Time", list(team_map.keys()))
+            team_id = team_map[team_name]
+        else:
+            team_id = user["team_id"]
+            st.text_input("Time", value=user.get("team_name", ""), disabled=True)
+
+        amount = st.number_input(
+            "Valor da proposta",
+            min_value=1000000.0,
+            step=100000.0,
+            key="amount_preview_v5",
+            format="%.2f",
+        )
+
+        st.caption(f"Confirmação: {formatar_brl_v5(amount)}")
+        st.caption(f"Por extenso: {valor_por_extenso(amount)}")
+
+        years = st.number_input("Anos", min_value=1, max_value=4, step=1)
+
+        if st.button("Enviar proposta"):
+            ok, msg = submit_bid_v5(
+                player_id,
+                team_id,
+                amount,
+                years,
+                user["email"],
+                user["user_id"],
+                user["role"],
+                user.get("team_id"),
+            )
+            if ok:
+                st.success(msg)
+                st.rerun()
+            else:
+                st.error(msg)
 with cap_tab:
     cap_df = pd.DataFrame(get_team_rows_v5())
     if not cap_df.empty:
